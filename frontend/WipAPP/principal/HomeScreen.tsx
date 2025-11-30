@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation';
@@ -44,6 +45,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [lastUsedCar, setLastUsedCar] = useState<Car | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showCarOptions, setShowCarOptions] = useState(false);
 
   const loadUserData = async () => {
     try {
@@ -187,7 +189,7 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
 
 
-        {/* Estadísticas Rápidas */}
+        {/* Estadísticas Rápidas 
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{cars.length}</Text>
@@ -206,8 +208,14 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={styles.statLabel}>Reciente</Text>
           </View>
         </View>
+        */}
 
         {/* Secciones de Coches */}
+        <View>
+        <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{cars.length}</Text>
+            <Text style={styles.statLabel}>Coches</Text>
+        </View>
         {getCarSections().map((section, index) => (
           <View key={index} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -223,7 +231,7 @@ export default function HomeScreen({ navigation }: Props) {
             ))}
           </View>
         ))}
-
+        </View>
         {/* Mensaje si no hay coches */}
         {cars.length === 0 && (
           <View style={styles.emptyState}>
@@ -234,13 +242,68 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         )}
 
-        {/* Botón para vincular nuevo coche */}
+        {/* Botón para vincular nuevo coche 
         <TouchableOpacity
           style={styles.linkCarButton}
           onPress={handleLinkCar}
         >
           <Text style={styles.linkCarButtonText}>+ Vincular Nuevo Coche</Text>
         </TouchableOpacity>
+        */}
+
+        <TouchableOpacity
+          style={styles.linkCarButton}
+          onPress={() => setShowCarOptions(true)}
+        >
+          <Text style={styles.linkCarButtonText}>+ Añadir Coche</Text>
+        </TouchableOpacity>
+
+        {/* Y agregar el modal de opciones:*/}
+        <Modal
+          visible={showCarOptions}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowCarOptions(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Añadir Coche</Text>
+              
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={() => {
+                  setShowCarOptions(false);
+                  navigation.navigate('LinkCar');
+                }}
+              >
+                <Text style={styles.modalOptionText}>🔗 Vincular Coche Existente</Text>
+                <Text style={styles.modalOptionSubtext}>
+                  Usa matrícula y PIN de un coche ya registrado
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={() => {
+                  setShowCarOptions(false);
+                  navigation.navigate('CreateCar');
+                }}
+              >
+                <Text style={styles.modalOptionText}>🚗 Crear Nuevo Coche</Text>
+                <Text style={styles.modalOptionSubtext}>
+                  Registra un coche nuevo en el sistema
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowCarOptions(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -513,9 +576,59 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 80,
-    paddingBottom: 60
   },
   linkCarButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#1a1a1a',
+  },
+  modalOption: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  modalOptionSubtext: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 16,
+  },
+  modalCancelButton: {
+    backgroundColor: '#6c757d',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  modalCancelText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',

@@ -7,6 +7,7 @@ import {
     FlatList,
     StyleSheet,
     StatusBar,
+    useWindowDimensions, // ✅ Reemplaza Dimensions
     Dimensions,
     NativeSyntheticEvent,
     NativeScrollEvent
@@ -18,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Props = StackScreenProps<RootStackParamList, 'Onboarding'>;
 
-const { width: screenWidth } = Dimensions.get('window');
+//const { width: screenWidth } = Dimensions.get('window');
 
 const onboardingSlides = [
   {
@@ -45,6 +46,7 @@ export default function OnboardingScreen({ navigation }: Props) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollInProgress = useRef(false);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions(); // ✅ Hook reactivo
 
   const nextSlide = () => {
     if (currentIndex < onboardingSlides.length - 1) {
@@ -110,7 +112,7 @@ export default function OnboardingScreen({ navigation }: Props) {
 
   // Renderizar cada item del FlatList
   const renderItem = ({ item }: { item: typeof onboardingSlides[0] }) => (
-    <View style={styles.slide}>
+    <View style={[styles.slide,  { width: screenWidth }]}>
       <Text style={styles.icon}>{item.icon}</Text>
       <Text style={styles.title}>{item.title}</Text>
       <Text style={styles.description}>{item.description}</Text>
@@ -143,12 +145,13 @@ export default function OnboardingScreen({ navigation }: Props) {
         onMomentumScrollEnd={onMomentumScrollEnd}
         scrollEventThrottle={16}
         getItemLayout={(_, index) => ({
-          length: screenWidth,
+          length: screenWidth, // ✅ Actualizado dinámicamente
           offset: screenWidth * index,
           index,
         })}
         // Prevenir scroll durante animaciones programáticas
         scrollEnabled={!scrollInProgress.current}
+        key={`onboarding-${screenWidth}`} // ✅ Force re-render on dimension change
       />
 
       {/* Indicadores - Versión mejorada */}
@@ -240,7 +243,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   slide: {
-    width: screenWidth,
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',

@@ -20,6 +20,7 @@ export type RootStackParamList = {
   UserProfile: undefined;
   CarHome: { car: any };
   LinkCar: undefined;
+  CreateCar: undefined;
 };
 
 // Extender los tipos globales de React Navigation

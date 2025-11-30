@@ -22,6 +22,40 @@ export const carAPI = {
     }
   },
 
+  createCar: async (carData: {
+    license_plate: string;
+    pin_code: string;
+    brand?: string | null;
+    model?: string | null;
+    year?: number | null;
+    color?: string | null;
+    vin?: string | null;
+  }): Promise<any> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cars/create`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(carData),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Para errores de validación, enviamos el objeto completo de errores
+        if (response.status === 422 && data.errors) {
+          throw new Error(JSON.stringify(data));
+        }
+        throw new Error(data.message || 'Error al crear coche');
+      }
+      
+      return data;
+      
+    } catch (error: any) {
+      console.error('❌ Error al crear coche:', error);
+      throw error;
+    }
+  },
+
   linkCar: async (licensePlate: string, pinCode: string): Promise<any> => {
     try {
       const response = await fetch(`${API_BASE_URL}/cars/link`, {

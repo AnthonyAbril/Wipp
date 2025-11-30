@@ -32,6 +32,7 @@ import LinkCarScreen from './principal/LinkCarScreen';
 import CarHomeScreen from './principal/CarHomeScreen';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import TestScrollScreen from './TestScrollScreen';
+import CreateCarScreen from './principal/CreateCarScreen';
 
 // Crear el navigator con el tipo = RouterModule en Angular
 //const Stack = createStackNavigator<RootStackParamList>();
@@ -131,8 +132,17 @@ export default function App() {
             component={LinkCarScreen} // Crear esta pantalla después
             options={{ 
               title: 'Vincular Coche',
-              headerShown: true
+              headerShown: false,
+              animation: 'slide_from_right'
             }}
+          />
+
+          <Stack.Screen
+            name='CreateCar'
+            component={CreateCarScreen}
+            options={
+              {animation: 'slide_from_right'}
+            }
           />
 
           <Stack.Screen
