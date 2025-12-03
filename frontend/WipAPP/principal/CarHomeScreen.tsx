@@ -1,175 +1,344 @@
-import React from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  ScrollView 
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-
-// Importar tipos
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { carAPI } from '../services/carAPI';
 
-/*
-    ESTA ES UNA PLANTILLA PARA CREAR UNA NUEVA PAGINA
-
-    el proceso es simple pero largo
-
-    Sigue siempre estos 4 pasos:
-
-        Agregar ruta en types/navigation.ts
-
-        Crear componente NombrePagina.tsx
-
-        Importar y registrar en App.tsx
-
-        Agregar navegación desde donde quieras acceder
-
-
-    Para mandar y recibir datos entre pantallas se usa esto:
-
-    // En types/navigation.ts
-    export type RootStackParamList = {
-    // ...
-    Profile: { userId: string; userName: string };
-    };
-
-    // Navegar pasando parámetros
-    navigation.navigate('Profile', { 
-    userId: '123', 
-    userName: 'Ana' 
-    });
-
-    // Recibir parámetros en Profile.tsx
-    type Props = StackScreenProps<RootStackParamList, 'Profile'>;
-
-    export default function Profile({ route, navigation }: Props) {
-    const { userId, userName } = route.params;
-    
-    return (
-        <View>
-        <Text>Usuario: {userName}</Text>
-        <Text>ID: {userId}</Text>
-        </View>
-    );
-    }
-*/
-
-// Definir las props
 type Props = StackScreenProps<RootStackParamList, 'CarHome'>;
 
-export default function CarHomeScreen({ navigation }: Props) {
+interface Car {
+  id: number;
+  license_plate: string;
+  brand: string | null;
+  model: string | null;
+  year: number | null;
+  color: string | null;
+  vin: string | null;
+  pivot?: {
+    is_primary: boolean;
+    last_used_at: string | null;
+  };
+}
+
+interface CarInfo {
+  title: string;
+  value: string;
+  icon: string;
+}
+
+export default function CarHomeScreen({ route, navigation }: Props) {
+  const { car: initialCar } = route.params;
+  const [car, setCar] = useState<Car>(initialCar);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadCarData = async () => {
+    try {
+      setLoading(true);
+      const response = await carAPI.getUserCars();
+      const carsData = response.data.cars || [];
+      
+      // Buscar el coche actual con datos actualizados
+      const currentCar = carsData.find((c: Car) => c.id === car.id) || car;
+      setCar(currentCar);
+      
+    } catch (error: any) {
+      console.error('Error loading car data:', error);
+      Alert.alert('Error', 'No se pudieron cargar los datos del coche');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    // Marcar como último coche usado al entrar
+    const markAsLastUsed = async () => {
+      try {
+        await carAPI.setLastUsedCar(car.id);
+      } catch (error) {
+        console.error('Error al marcar como último usado:', error);
+      }
+    };
+    
+    markAsLastUsed();
+  }, [car.id]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadCarData();
+  };
+
+  // Preparar información del coche para mostrar
+  const carInfo: CarInfo[] = [
+    { title: 'Matrícula', value: car.license_plate, icon: '🔢' },
+    { title: 'Marca', value: car.brand || 'No especificada', icon: '🏭' },
+    { title: 'Modelo', value: car.model || 'No especificado', icon: '🚙' },
+    { title: 'Año', value: car.year?.toString() || 'No especificado', icon: '📅' },
+    { title: 'Color', value: car.color || 'No especificado', icon: '🎨' },
+    { title: 'VIN', value: car.vin || 'No especificado', icon: '🔑' },
+  ];
+
+  const handleSetPrimary = async () => {
+    try {
+      await carAPI.setPrimaryCar(car.id);
+      Alert.alert('✅ Éxito', `${car.license_plate} establecido como coche principal`);
+      navigation.goBack();
+    } catch (error: any) {
+      console.error('Error setting primary car:', error);
+      Alert.alert('❌ Error', 'No se pudo establecer como coche principal');
+    }
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Cargando...</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
-
-    //PRUEBAS DE NAVEGACION
-
-    <View style={styles.container}>
-      <Text style={styles.title}>¡Nueva Página!</Text>
-      <Text style={styles.subtitle}>
-        Esta es una página adicional en tu app
-      </Text>
-
-      <ScrollView style={styles.content}>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Información Importante</Text>
-          <Text>
-            Aquí puedes mostrar contenido adicional, configuraciones, 
-            o cualquier información que necesites en tu aplicación.
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Header del Coche */}
+        <View style={styles.header}>
+          <Text style={styles.carIcon}>🚗</Text>
+          <Text style={styles.title}>{car.license_plate}</Text>
+          {car.pivot?.is_primary && (
+            <View style={styles.primaryBadge}>
+              <Text style={styles.primaryBadgeText}>⭐ Principal</Text>
+            </View>
+          )}
+          
+          <Text style={styles.subtitle}>
+            {car.brand} {car.model} {car.year && `• ${car.year}`}
           </Text>
         </View>
-        
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Características</Text>
-          <Text>• Navegación fluida</Text>
-          <Text>• Tipado seguro con TypeScript</Text>
-          <Text>• Diseño responsive</Text>
+
+        {/* Información del Coche */}
+        <View style={styles.infoSection}>
+          <Text style={styles.sectionTitle}>Información del Coche</Text>
+          {carInfo.map((item, index) => (
+            <View key={index} style={styles.infoRow}>
+              <View style={styles.infoIconContainer}>
+                <Text style={styles.infoIcon}>{item.icon}</Text>
+                <Text style={styles.infoLabel}>{item.title}</Text>
+              </View>
+              <Text style={styles.infoValue}>{item.value}</Text>
+            </View>
+          ))}
         </View>
+
+        {/* Acciones */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>Acciones</Text>
+          
+          {!car.pivot?.is_primary && (
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={handleSetPrimary}
+            >
+              <Text style={styles.actionButtonText}>⭐ Establecer como Principal</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.secondaryAction]}
+            onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto')}
+          >
+            <Text style={[styles.actionButtonText, styles.secondaryActionText]}>
+              📊 Ver Estadísticas
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.secondaryAction]}
+            onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto')}
+          >
+            <Text style={[styles.actionButtonText, styles.secondaryActionText]}>
+              ⛽ Registrar Repostaje
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.secondaryAction]}
+            onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto')}
+          >
+            <Text style={[styles.actionButtonText, styles.secondaryActionText]}>
+              🔧 Mantenimiento
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Botón para volver */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.navigate("Home")}  // ← Cambiado de goBack()
+        >
+          <Text style={styles.backButtonText}>← Volver a Mis Coches</Text>
+        </TouchableOpacity>
       </ScrollView>
-
-      {/* Botones de navegación */}
-      <TouchableOpacity 
-        style={styles.button}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.buttonText}>Volver Atrás</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity 
-        style={[styles.button, styles.secondaryButton]}
-        //onPress={() => navigation.navigate('pruebaPrincipal')}
-      >
-        <Text style={styles.buttonText}>Ir al Home</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity 
-        style={[styles.button, styles.tertiaryButton]}
-        //onPress={() => navigation.navigate('prueba1')}
-      >
-        <Text style={styles.buttonText}>Volver a Details</Text>
-      </TouchableOpacity>
-    </View>
-
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff8f8',
-    padding: 20,
-    paddingTop: 60,
+    backgroundColor: '#f5f5f5',
+  },
+  contentContainer: {
+    paddingBottom: 40,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  header: {
+    backgroundColor: '#ffffff',
+    padding: 24,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  carIcon: {
+    fontSize: 60,
+    marginBottom: 12,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-    textAlign: 'center',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  primaryBadge: {
+    backgroundColor: '#FFF9E6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    marginBottom: 12,
+  },
+  primaryBadgeText: {
+    color: '#B8860B',
+    fontSize: 14,
+    fontWeight: '600',
   },
   subtitle: {
     fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 30,
     color: '#666',
+    textAlign: 'center',
   },
-  content: {
-    flex: 1,
-    marginBottom: 20,
-  },
-  card: {
-    backgroundColor: 'white',
+  infoSection: {
+    backgroundColor: '#ffffff',
+    marginTop: 20,
+    marginHorizontal: 16,
+    borderRadius: 12,
     padding: 20,
-    borderRadius: 10,
-    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF6B6B',
   },
-  cardTitle: {
+  sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 10,
-    color: '#FF6B6B',
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
   },
-  button: {
-    backgroundColor: '#FF6B6B',
-    padding: 15,
-    borderRadius: 8,
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  secondaryButton: {
-    backgroundColor: '#4ECDC4',
+  infoIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  tertiaryButton: {
-    backgroundColor: '#45B7D1',
+  infoIcon: {
+    fontSize: 20,
+    marginRight: 12,
   },
-  buttonText: {
+  infoLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1a1a1a',
+  },
+  actionsSection: {
+    backgroundColor: '#ffffff',
+    marginTop: 20,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionButton: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryAction: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  secondaryActionText: {
+    color: '#333',
+  },
+  backButton: {
+    backgroundColor: '#6c757d',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 20,
+  },
+  backButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',

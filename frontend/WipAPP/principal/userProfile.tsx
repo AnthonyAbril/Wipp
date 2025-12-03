@@ -97,14 +97,14 @@ export default function userProfile({ navigation }: Props) {
 
       <TouchableOpacity 
         style={[styles.button, styles.secondaryButton]}
-        onPress={() => navigation.navigate('pruebaPrincipal')}
+        //onPress={() => navigation.navigate('pruebaPrincipal')}
       >
         <Text style={styles.buttonText}>Ir al Home</Text>
       </TouchableOpacity>
 
       <TouchableOpacity 
         style={[styles.button, styles.tertiaryButton]}
-        onPress={() => navigation.navigate('prueba1')}
+        //onPress={() => navigation.navigate('prueba1')}
       >
         <Text style={styles.buttonText}>Volver a Details</Text>
       </TouchableOpacity>

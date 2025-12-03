@@ -101,7 +101,7 @@ export default function HomeScreen({ navigation }: Props) {
     loadUserData();
   }, []);
 
-  // Redirección automática al último coche usado
+  /* Redirección automática al último coche usado
   useEffect(() => {
     const checkLastUsedCar = async () => {
       try {
@@ -132,6 +132,7 @@ export default function HomeScreen({ navigation }: Props) {
     // Ejecutar solo al montar el componente
     checkLastUsedCar();
   }, []);
+  */
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -158,20 +159,57 @@ export default function HomeScreen({ navigation }: Props) {
       await carAPI.setPrimaryCar(car.id);
       setPrimaryCar(car);
       
-      // Actualizar lista de coches
-      const updatedCars = cars.map(c => ({
-        ...c,
-        pivot: {
-          ...c.pivot,
-          is_primary: c.id === car.id
+      // Actualizar lista de coches - VERSIÓN COMPLETAMENTE CORREGIDA
+      const updatedCars = cars.map(c => {
+        // Crear una copia segura del coche
+        const currentCar = { ...c };
+        
+        // Asegurarnos de que pivot existe
+        if (!currentCar.pivot) {
+          currentCar.pivot = {
+            is_primary: false,
+            last_used_at: null
+          };
         }
-      }));
-      //setCars(updatedCars);
+        
+        // Si este es el coche que se hizo principal
+        if (currentCar.id === car.id) {
+          return {
+            ...currentCar,
+            pivot: {
+              ...currentCar.pivot,
+              is_primary: true
+            }
+          };
+        }
+        
+        // Si era el coche principal anterior
+        if (currentCar.pivot.is_primary) {
+          return {
+            ...currentCar,
+            pivot: {
+              ...currentCar.pivot,
+              is_primary: false
+            }
+          };
+        }
+        
+        return currentCar;
+      });
       
-      Alert.alert('Éxito', `${car.license_plate} establecido como coche principal`);
+      // Reordenar coches: principal primero
+      const sortedCars = [...updatedCars].sort((a, b) => {
+        const aIsPrimary = a.pivot?.is_primary ? 1 : 0;
+        const bIsPrimary = b.pivot?.is_primary ? 1 : 0;
+        return bIsPrimary - aIsPrimary;
+      });
+      
+      setCars(sortedCars);
+      
+      Alert.alert('✅ Éxito', `${car.license_plate} establecido como coche principal`);
     } catch (error: any) {
       console.error('Error al establecer coche principal:', error);
-      Alert.alert('Error', 'No se pudo establecer como coche principal');
+      Alert.alert('❌ Error', 'No se pudo establecer como coche principal');
     }
   };
 
@@ -311,6 +349,31 @@ interface CarCardProps {
 }
 
 const CarCard = ({ car, onPress, onSetPrimary, isPrimary }: CarCardProps) => {
+  const getTimeAgo = (dateString: string | null): string => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    let interval = Math.floor(seconds / 31536000);
+    if (interval >= 1) return `hace ${interval} año${interval > 1 ? 's' : ''}`;
+    
+    interval = Math.floor(seconds / 2592000);
+    if (interval >= 1) return `hace ${interval} mes${interval > 1 ? 'es' : ''}`;
+    
+    interval = Math.floor(seconds / 86400);
+    if (interval >= 1) return `hace ${interval} día${interval > 1 ? 's' : ''}`;
+    
+    interval = Math.floor(seconds / 3600);
+    if (interval >= 1) return `hace ${interval} hora${interval > 1 ? 's' : ''}`;
+    
+    interval = Math.floor(seconds / 60);
+    if (interval >= 1) return `hace ${interval} minuto${interval > 1 ? 's' : ''}`;
+    
+    return 'hace unos segundos';
+  };
+
   return (
     <TouchableOpacity 
       style={styles.carCard}
@@ -330,22 +393,26 @@ const CarCard = ({ car, onPress, onSetPrimary, isPrimary }: CarCardProps) => {
           <Text style={styles.carColor}>Color: {car.color}</Text>
         )}
       </View>
-        
-          <Text>hace 2h</Text>
-          
       
-      <View style={styles.carActions}>
-        {!isPrimary && (
-          <TouchableOpacity 
-            style={styles.primaryAction}
-            onPress={(e) => {
-              e.stopPropagation();
-              onSetPrimary();
-            }}
-          >
-            <Text style={styles.primaryActionText}>⭐ Principal</Text>
-          </TouchableOpacity>
+      <View style={styles.timeAndActions}>
+        {car.pivot?.last_used_at && (
+          <Text style={styles.lastUsedText}>
+            {getTimeAgo(car.pivot.last_used_at)}
+          </Text>
         )}
+        <View style={styles.carActions}>
+          {!isPrimary && (
+            <TouchableOpacity 
+              style={styles.primaryAction}
+              onPress={(e) => {
+                e.stopPropagation();
+                onSetPrimary();
+              }}
+            >
+              <Text style={styles.primaryActionText}>⭐ Principal</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -423,24 +490,6 @@ const styles = StyleSheet.create({
   carsContainer: {
     gap: 12,
   },
-  carCard: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  carInfo: {
-    flex: 1,
-  },
   carHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -459,9 +508,6 @@ const styles = StyleSheet.create({
   carColor: {
     fontSize: 12,
     color: '#888',
-  },
-  carActions: {
-    marginLeft: 12,
   },
   primaryAction: {
     backgroundColor: '#007AFF',
@@ -554,5 +600,41 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  timeAndActions: {
+    alignItems: 'flex-end',
+  },
+  lastUsedText: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 8,
+  },
+  
+  carCard: {
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    minHeight: 100, // Altura mínima para mejor apariencia
+  },
+  
+  // Ajustar carInfo para tomar más espacio:
+  carInfo: {
+    flex: 2, // Toma más espacio
+  },
+  
+  // Ajustar carActions:
+  carActions: {
+    marginLeft: 12,
   },
 });

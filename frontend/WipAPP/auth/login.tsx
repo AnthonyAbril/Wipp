@@ -16,6 +16,7 @@ import {
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation';
 import { authAPI } from '../services/authAPI';
+import { carAPI } from "../services/carAPI";
 
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
@@ -73,8 +74,35 @@ export default function Login({ navigation }: Props) {
             // ✅ Login exitoso
             console.log('✅ Login response:', response);
             
-            // Navegar al home
-            navigation.navigate('Home');
+            // Obtener los coches del usuario para ver si hay último usado
+            try {
+            const carsResponse = await carAPI.getUserCars();
+            const carsData = carsResponse.data.cars || [];
+            
+            if (carsData.length > 0) {
+                // Ordenar por last_used_at para encontrar el más reciente no nulo
+                const sortedByLastUsed = [...carsData].sort((a, b) => {
+                const aTime = a.pivot?.last_used_at ? new Date(a.pivot.last_used_at).getTime() : 0;
+                const bTime = b.pivot?.last_used_at ? new Date(b.pivot.last_used_at).getTime() : 0;
+                return bTime - aTime;
+                });
+                
+                const mostRecentCar = sortedByLastUsed[0];
+                
+                // Solo redirigir si hay un último coche usado válido (con last_used_at)
+                if (mostRecentCar && mostRecentCar.pivot?.last_used_at) {
+                console.log('🔄 Redirigiendo al último coche usado:', mostRecentCar.license_plate);
+                navigation.replace('CarHome', { car: mostRecentCar });
+                return;
+                }
+            }
+            } catch (error) {
+            console.error('Error al obtener coches:', error);
+            // Si falla, continuamos navegando a Home
+            }
+            
+            // Si no hay coches o no hay último usado, navegar a Home
+            navigation.replace('Home');
             
         } catch (error: any) {
             console.error('❌ Login error:', error);
@@ -84,7 +112,7 @@ export default function Login({ navigation }: Props) {
             
             // Si es error de credenciales, limpiar campo de contraseña
             if (error.message.includes('credenciales')) {
-                setPassword('');
+            setPassword('');
             }
             
             setErrors(prev => ({ ...prev, general: errorMessage }));
@@ -92,7 +120,7 @@ export default function Login({ navigation }: Props) {
         } finally {
             setIsLoading(false);
         }
-    };
+        };
 
     // Limpiar errores al escribir
     const handleEmailChange = (text: string): void => {

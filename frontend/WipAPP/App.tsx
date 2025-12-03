@@ -149,7 +149,7 @@ export default function App() {
             name="CarHome"
             component={CarHomeScreen} // Crear esta pantalla después
             options={{ 
-              headerShown: true,
+              headerShown: false,
               title: 'Mi Coche'
             }}
           />
