@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
 
 class Car extends Model
@@ -18,20 +20,49 @@ class Car extends Model
         'year',
         'color',
         'vin',
+        'car_image',
     ];
 
     protected $hidden = [
         'pin_code',
     ];
 
+    // Agregar atributo calculado para URL completa de imagen
+    protected $appends = ['car_image_url'];
+
     /**
-     * Relación muchos a muchos con User
+     * Obtener la URL completa de la imagen del coche
      */
-    public function users()
+    protected function carImageUrl(): Attribute
     {
-        return $this->belongsToMany(User::class, 'user_car')
-                    ->withPivot('is_primary', 'last_used_at')
-                    ->withTimestamps();
+        return Attribute::make(
+            get: function () {
+                if (!$this->car_image) {
+                    return null;
+                }
+                
+                // Si ya es una URL completa, devolverla
+                if (filter_var($this->car_image, FILTER_VALIDATE_URL)) {
+                    return $this->car_image;
+                }
+                
+                try {
+                    // De lo contrario, generar URL desde Storage
+                    $url = Storage::url($this->car_image);
+                    
+                    // Para desarrollo local, asegurar URL completa
+                    if (strpos($url, 'http') !== 0) {
+                        $baseUrl = rtrim(config('app.url', 'http://localhost:8000'), '/');
+                        $url = $baseUrl . '/' . ltrim($url, '/');
+                    }
+                    
+                    return $url;
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Error generando car_image_url: ' . $e->getMessage());
+                    return null;
+                }
+            }
+        );
     }
 
     /**
@@ -56,6 +87,16 @@ class Car extends Model
     public function scopeByLicensePlate($query, $licensePlate)
     {
         return $query->where('license_plate', $licensePlate);
+    }
+
+    /**
+     * Relación muchos a muchos con User
+     */
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'user_car')
+                    ->withPivot('is_primary', 'last_used_at')
+                    ->withTimestamps();
     }
 
     /**

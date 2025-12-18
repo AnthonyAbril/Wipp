@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,14 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { carAPI } from '../services/carAPI';
+import { API_BASE_URL } from '../services/api';
 
 type Props = StackScreenProps<RootStackParamList, 'CarHome'>;
 
@@ -24,6 +27,8 @@ interface Car {
   year: number | null;
   color: string | null;
   vin: string | null;
+  car_image: string | null;
+  car_image_url?: string | null;
   pivot?: {
     is_primary: boolean;
     last_used_at: string | null;
@@ -37,20 +42,67 @@ interface CarInfo {
 }
 
 export default function CarHomeScreen({ route, navigation }: Props) {
-  const { car: initialCar } = route.params;
+  // ✅ Extraer parámetros con valor por defecto
+  const { car: initialCar, refresh = false } = route.params || {};
+  
   const [car, setCar] = useState<Car>(initialCar);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // ✅ Un solo useFocusEffect optimizado
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      
+      // Si viene de una actualización, recargar datos
+      if (refresh) {
+        loadCarData();
+        // Limpiar el parámetro
+        navigation.setParams({ refresh: false } as any);
+      } else {
+        // Solo cargar si no está ya cargando
+        if (!loading) {
+          loadCarData();
+        }
+      }
+      
+      // Configurar intervalo opcional
+      const interval = setInterval(() => {
+        if (isActive && !loading) {
+          loadCarData();
+        }
+      }, 30000);
+      
+      return () => {
+        isActive = false;
+        clearInterval(interval);
+      };
+    }, [refresh, navigation])
+  );
+
+  // Función para cargar datos del coche
   const loadCarData = async () => {
     try {
       setLoading(true);
       const response = await carAPI.getUserCars();
-      const carsData = response.data.cars || [];
       
-      // Buscar el coche actual con datos actualizados
-      const currentCar = carsData.find((c: Car) => c.id === car.id) || car;
-      setCar(currentCar);
+      if (response.success && response.data.cars) {
+        const carsData = response.data.cars;
+        
+        // Buscar el coche actual con datos actualizados
+        const currentCar = carsData.find((c: Car) => c.id === car.id) || car;
+        
+        // Asegurarnos de que tenemos la URL completa de la imagen
+        const carWithImage = {
+          ...currentCar,
+          car_image_url: currentCar.car_image_url || 
+                         (currentCar.car_image ? 
+                          `${API_BASE_URL}/storage/${currentCar.car_image}` : 
+                          null)
+        };
+        
+        setCar(carWithImage);
+      }
       
     } catch (error: any) {
       console.error('Error loading car data:', error);
@@ -80,7 +132,7 @@ export default function CarHomeScreen({ route, navigation }: Props) {
   };
 
   // Preparar información del coche para mostrar
-  const carInfo: CarInfo[] = [
+  const carInfo = [
     { title: 'Matrícula', value: car.license_plate, icon: '🔢' },
     { title: 'Marca', value: car.brand || 'No especificada', icon: '🏭' },
     { title: 'Modelo', value: car.model || 'No especificado', icon: '🚙' },
@@ -93,7 +145,7 @@ export default function CarHomeScreen({ route, navigation }: Props) {
     try {
       await carAPI.setPrimaryCar(car.id);
       Alert.alert('✅ Éxito', `${car.license_plate} establecido como coche principal`);
-      navigation.goBack();
+      loadCarData(); // Recargar datos
     } catch (error: any) {
       console.error('Error setting primary car:', error);
       Alert.alert('❌ Error', 'No se pudo establecer como coche principal');
@@ -120,14 +172,47 @@ export default function CarHomeScreen({ route, navigation }: Props) {
       >
         {/* Header del Coche */}
         <View style={styles.header}>
-          <Text style={styles.carIcon}>🚗</Text>
+          {/* Imagen del coche */}
+          <TouchableOpacity 
+            style={styles.carImageContainer}
+            onPress={() => {
+              console.log("Navegando a EditCarImage con car ID:", car.id);
+              navigation.navigate('EditCarImage', { car });
+            }}
+            activeOpacity={0.7}
+          >
+            {car.car_image_url || car.car_image ? (
+              <Image 
+                source={{ 
+                  uri: car.car_image_url || 
+                       (car.car_image ? 
+                        `${API_BASE_URL}/storage/${car.car_image}` : 
+                        '')
+                }} 
+                style={styles.carImage}
+                resizeMode="cover"
+                onError={(e) => {
+                  console.log("Error cargando imagen:", e.nativeEvent.error);
+                }}
+              />
+            ) : (
+              <View style={styles.carImagePlaceholder}>
+                <Text style={styles.carImagePlaceholderText}>🚗</Text>
+                <Text style={styles.carImagePlaceholderSubtext}>
+                  Tocar para agregar imagen
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          
           <Text style={styles.title}>{car.license_plate}</Text>
+          
           {car.pivot?.is_primary && (
             <View style={styles.primaryBadge}>
               <Text style={styles.primaryBadgeText}>⭐ Principal</Text>
             </View>
           )}
-          
+
           <Text style={styles.subtitle}>
             {car.brand} {car.model} {car.year && `• ${car.year}`}
           </Text>
@@ -162,6 +247,15 @@ export default function CarHomeScreen({ route, navigation }: Props) {
 
           <TouchableOpacity 
             style={[styles.actionButton, styles.secondaryAction]}
+            onPress={() => navigation.navigate('EditCarImage', { car })}
+          >
+            <Text style={[styles.actionButtonText, styles.secondaryActionText]}>
+              🖼️ {car.car_image ? 'Cambiar Imagen' : 'Agregar Imagen'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.secondaryAction]}
             onPress={() => Alert.alert('Próximamente', 'Esta función estará disponible pronto')}
           >
             <Text style={[styles.actionButtonText, styles.secondaryActionText]}>
@@ -191,7 +285,7 @@ export default function CarHomeScreen({ route, navigation }: Props) {
         {/* Botón para volver */}
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.navigate("Home")}  // ← Cambiado de goBack()
+          onPress={() => navigation.navigate("Home", { refresh: true } as any)}
         >
           <Text style={styles.backButtonText}>← Volver a Mis Coches</Text>
         </TouchableOpacity>
@@ -343,4 +437,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+
+  carImageContainer: {
+  width: 120,
+  height: 90,
+  borderRadius: 12,
+  backgroundColor: '#f0f0f0',
+  marginBottom: 16,
+  overflow: 'hidden',
+  borderWidth: 2,
+  borderColor: '#007AFF',
+},
+carImage: {
+  width: '100%',
+  height: '100%',
+},
+carImagePlaceholder: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#f8f9fa',
+},
+carImagePlaceholderText: {
+  fontSize: 40,
+  color: '#666',
+},
+carImagePlaceholderSubtext: {
+  fontSize: 12,
+  color: '#999',
+  textAlign: 'center',
+  marginTop: 4,
+},
 });

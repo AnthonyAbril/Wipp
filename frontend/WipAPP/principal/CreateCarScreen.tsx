@@ -10,11 +10,14 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  Modal
 } from 'react-native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation';
 import { carAPI } from '../services/carAPI';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateCar'>;
 
@@ -26,6 +29,8 @@ interface CreateCarForm {
   year: string;
   color: string;
   vin: string;
+  car_image: string | null; // ← Añadir este campo
+  _car_image_file?: File | null
 }
 
 interface FormErrors {
@@ -48,6 +53,8 @@ export default function CreateCarScreen({ navigation }: Props) {
     year: '',
     color: '',
     vin: '',
+    car_image: null, // ← Añadir esto
+    _car_image_file: null, // ← AGREGAR ESTA LÍNEA
   });
   
   const [loading, setLoading] = useState(false);
@@ -97,7 +104,8 @@ export default function CreateCarScreen({ navigation }: Props) {
     setErrors({});
 
     try {
-      const carData = {
+      // Preparar datos para FormData
+      const carData: any = {
         license_plate: form.license_plate.toUpperCase().replace(/\s/g, ''),
         pin_code: form.pin_code,
         brand: form.brand || null,
@@ -105,35 +113,71 @@ export default function CreateCarScreen({ navigation }: Props) {
         year: form.year ? parseInt(form.year) : null,
         color: form.color || null,
         vin: form.vin || null,
+        car_image: form.car_image,
+        _car_image_file: form._car_image_file,
       };
 
-      // Necesitamos agregar esta función a carAPI
+      // Manejar la imagen de forma diferente para web vs móvil
+      if (Platform.OS === 'web' && form._car_image_file) {
+        // Web: usar el File directamente
+        carData.car_image = form._car_image_file;
+      } else if (Platform.OS !== 'web' && form.car_image) {
+        // Mobile: la URI ya está en form.car_image
+        carData.car_image = form.car_image;
+      }
+
       await carAPI.createCar(carData);
       
       Alert.alert(
         '✅ Coche Creado',
-        `El coche con matrícula ${form.license_plate.toUpperCase()} ha sido creado y vinculado exitosamente.`,
+        `El coche con matrícula ${form.license_plate.toUpperCase()} ha sido creado exitosamente.`,
         [
           {
-            text: 'Aceptar',
-            onPress: () => navigation.navigate('Home'),
+            text: 'Ver Coche',
+            onPress: () => {
+              // Opción 1: Recargar y volver atrás
+              navigation.navigate('Home', { refresh: true });
+            },
+          },
+          {
+            text: 'Seguir Creando',
+            style: 'cancel',
+            onPress: () => {
+              // Limpiar formulario para crear otro
+              setForm({
+                license_plate: '',
+                pin_code: '',
+                brand: '',
+                model: '',
+                year: '',
+                color: '',
+                vin: '',
+                car_image: null,
+                _car_image_file: null,
+              });
+              setImage(null);
+            },
           },
         ]
       );
       
     } catch (error: any) {
-      console.error('Error creating car:', error);
-      
+    console.error('Error creating car:', error);
+    
       // Manejar errores de validación del backend
-      if (error.message && typeof error.message === 'string') {
+      if (error.message) {
         try {
           const errorData = JSON.parse(error.message);
           if (errorData.errors) {
-            // Mapear errores del backend al formulario
             const backendErrors: FormErrors = {};
             Object.keys(errorData.errors).forEach(key => {
               if (errorData.errors[key] && errorData.errors[key][0]) {
-                backendErrors[key as keyof FormErrors] = errorData.errors[key][0];
+                // Mapear 'car_image' a un mensaje general si existe
+                if (key === 'car_image') {
+                  backendErrors.general = `Error en imagen: ${errorData.errors[key][0]}`;
+                } else {
+                  backendErrors[key as keyof FormErrors] = errorData.errors[key][0];
+                }
               }
             });
             setErrors(backendErrors);
@@ -150,6 +194,8 @@ export default function CreateCarScreen({ navigation }: Props) {
         errorMessage = 'Error de conexión. Verifica tu conexión a internet e intenta nuevamente.';
       } else if (error.message.includes('license_plate already exists')) {
         errorMessage = 'Ya existe un coche con esta matrícula.';
+      } else if (error.message.includes('Imagen inválida')) {
+        errorMessage = error.message;
       } else {
         errorMessage = error.message || 'Error desconocido al crear el coche';
       }
@@ -167,6 +213,123 @@ export default function CreateCarScreen({ navigation }: Props) {
   const updateForm = (field: keyof CreateCarForm, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
     clearError(field as keyof FormErrors);
+  };
+
+  //Funciones para el manejo de imagen
+  const [image, setImage] = useState<string | null>(null);
+  const [showImageOptions, setShowImageOptions] = useState(false);
+
+  // FUNCIÓN PRINCIPAL QUE DETECTA LA PLATAFORMA
+  const handleSelectImagePress = () => {
+    if (Platform.OS === 'web') {
+      handleImagePickWeb();
+    } else {
+      // Solo en móvil mostramos el modal con opciones
+      setShowImageOptions(true);
+    }
+  };
+
+  // FUNCIÓN ESPECÍFICA PARA WEB - VERSIÓN CORREGIDA
+  const handleImagePickWeb = () => {
+    return new Promise<void>((resolve) => {
+      try {
+        // Crear un input de tipo file oculto
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        
+        input.onchange = async (event: any) => {
+          const file = event.target.files?.[0];
+          if (!file) {
+            resolve();
+            return;
+          }
+          
+          // Validar tamaño (opcional, recomendado)
+          const maxSize = 5 * 1024 * 1024; // 5MB
+          if (file.size > maxSize) {
+            Alert.alert('Error', 'La imagen es demasiado grande. Máximo 5MB.');
+            resolve();
+            return;
+          }
+          
+          // Crear URL para previsualización
+          const imageUri = URL.createObjectURL(file);
+          setImage(imageUri);
+          
+          // Guardar el archivo REAL para enviar al backend
+          // Convertimos el File a un formato que FormData pueda enviar
+          setForm(prev => ({ 
+            ...prev, 
+            car_image: imageUri,
+            // Necesitamos guardar el archivo real para el envío
+            _car_image_file: file  // ← Guardamos el archivo real
+          }));
+          
+          resolve();
+        };
+        
+        // Disparar el clic
+        input.click();
+      } catch (error) {
+        console.error('Error en selector web:', error);
+        Alert.alert('Error', 'No se pudo seleccionar la imagen');
+        resolve();
+      }
+    });
+  };
+
+  // FUNCIONES ESPECÍFICAS PARA MÓVIL (se mantienen igual)
+  const handleImagePickMobile = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para seleccionar una imagen');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+      setForm(prev => ({ ...prev, car_image: result.assets[0].uri }));
+      setShowImageOptions(false);
+    }
+  };
+
+  const handleTakePhotoMobile = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu cámara para tomar una foto');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+      setForm(prev => ({ ...prev, car_image: result.assets[0].uri }));
+      setShowImageOptions(false);
+    }
+  };
+
+  const removeImage = () => {
+    setImage(null);
+    setForm(prev => ({ 
+      ...prev, 
+      car_image: null,
+      _car_image_file: null
+    }));
   };
 
   return (
@@ -346,6 +509,40 @@ export default function CreateCarScreen({ navigation }: Props) {
               </Text>
             </View>
 
+            <View style={styles.inputContainer}>
+
+            {/* Area de imagen */}
+            <Text style={styles.label}>Imagen del Coche (Opcional)</Text>
+            
+            <TouchableOpacity 
+              style={styles.imageContainer}
+              onPress={handleSelectImagePress}
+              disabled={loading}
+            >
+              {image ? (
+                <Image source={{ uri: image }} style={styles.image} />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Text style={styles.imagePlaceholderText}>🚗</Text>
+                  <Text style={styles.imagePlaceholderSubtext}>
+                    {loading ? 'Cargando...' : 'Tocar para agregar imagen'}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            
+            {image && (
+              <TouchableOpacity
+                style={styles.removeImageButton}
+                onPress={removeImage}
+                disabled={loading}
+              >
+                <Text style={styles.removeImageButtonText}>✕ Eliminar Imagen</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+
             {/* Botón de Crear */}
             <TouchableOpacity
               style={[
@@ -384,6 +581,43 @@ export default function CreateCarScreen({ navigation }: Props) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Modal para seleccionar opciones (SOLO EN MÓVIL) */}
+      {Platform.OS !== 'web' && (
+        <Modal
+          visible={showImageOptions}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowImageOptions(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Seleccionar Imagen</Text>
+              
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={handleImagePickMobile}  // Usa la funcion movil
+              >
+                <Text style={styles.modalOptionText}>📁 Elegir de la Galería</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={handleTakePhotoMobile}  // Usa la funcion movil
+              >
+                <Text style={styles.modalOptionText}>📸 Tomar Foto</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowImageOptions(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -498,4 +732,93 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
+
+  imageContainer: {
+  width: '100%',
+  height: 200,
+  borderRadius: 12,
+  backgroundColor: '#f0f0f0',
+  overflow: 'hidden',
+  borderWidth: 1,
+  borderColor: '#e9ecef',
+  marginBottom: 8,
+},
+image: {
+  width: '100%',
+  height: '100%',
+},
+imagePlaceholder: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+},
+imagePlaceholderText: {
+  fontSize: 50,
+  color: '#999',
+  marginBottom: 10,
+},
+imagePlaceholderSubtext: {
+  fontSize: 14,
+  color: '#999',
+  textAlign: 'center',
+},
+removeImageButton: {
+  backgroundColor: '#FF3B30',
+  padding: 10,
+  borderRadius: 8,
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+},
+removeImageButtonText: {
+  color: 'white',
+  fontSize: 14,
+  fontWeight: '600',
+},
+
+modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  justifyContent: 'flex-end',
+},
+modalContent: {
+  backgroundColor: 'white',
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  padding: 20,
+  paddingBottom: 40,
+},
+modalTitle: {
+  fontSize: 20,
+  fontWeight: 'bold',
+  textAlign: 'center',
+  marginBottom: 20,
+  color: '#1a1a1a',
+},
+modalOption: {
+  backgroundColor: '#f8f9fa',
+  padding: 16,
+  borderRadius: 12,
+  marginBottom: 12,
+  borderWidth: 1,
+  borderColor: '#e9ecef',
+},
+modalOptionText: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#007AFF',
+  textAlign: 'center',
+},
+modalCancelButton: {
+  backgroundColor: '#6c757d',
+  padding: 16,
+  borderRadius: 12,
+  alignItems: 'center',
+  marginTop: 8,
+},
+modalCancelText: {
+  color: 'white',
+  fontSize: 16,
+  fontWeight: '600',
+},
 });

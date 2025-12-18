@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CarController;
+use App\Http\Controllers\ImageController;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -35,14 +36,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
     
-    // Coches
+    // Imágenes de usuario
+    Route::post('/user/profile-image', [ImageController::class, 'uploadUserProfile']);
+    Route::delete('/user/profile-image', [ImageController::class, 'deleteUserProfile']);
+    
+    // Coches - RUTAS SIMPLIFICADAS
     Route::prefix('cars')->group(function () {
         Route::get('/user', [CarController::class, 'getUserCars']);
         Route::post('/link', [CarController::class, 'linkCar']);
         Route::post('/create', [CarController::class, 'createCar']);
+        
+        // Rutas específicas de coche
         Route::post('/{car}/primary', [CarController::class, 'setPrimaryCar']);
         Route::post('/{car}/last-used', [CarController::class, 'setLastUsedCar']);
         Route::delete('/{car}/unlink', [CarController::class, 'unlinkCar']);
+        
+        // ✅ SOLO ESTA RUTA PARA IMÁGENES DE COCHE
+        Route::post('/{car}/image', [ImageController::class, 'uploadCarImage']);
+        Route::delete('/{car}/image', [ImageController::class, 'deleteCarImage']);
     });
 
     // Ruta protegida de ejemplo

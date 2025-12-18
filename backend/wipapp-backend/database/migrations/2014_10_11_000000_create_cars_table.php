@@ -17,6 +17,7 @@ return new class extends Migration
             $table->integer('year')->nullable();
             $table->string('color')->nullable();
             $table->string('vin')->nullable()->unique(); // Vehicle Identification Number
+            $table->string('car_image')->nullable(); // ← Imagen del coche
             $table->timestamps();
         });
     }

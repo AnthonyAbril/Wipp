@@ -18,9 +18,8 @@ class User extends Authenticatable
         'email',
         'password',
         'last_used_car_id', // ← Añadir este campo
+        'profile_image', // ← Agregar este campo
     ];
-
-    // ... resto del código existente ...
 
     /**
      * Relación muchos a muchos con Car

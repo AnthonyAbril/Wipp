@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { API_BASE_URL, getAuthHeaders } from './api';
 
 export const imageAPI = {
@@ -41,25 +42,33 @@ export const imageAPI = {
   },
 
   // Subir imagen de coche
-  uploadCarImage: async (carId: number, imageUri: string): Promise<any> => {
+  uploadCarImage: async (carId: number, imageUri: string | File): Promise<any> => {
     try {
       const formData = new FormData();
       
-      const filename = imageUri.split('/').pop();
-      const match = /\.(\w+)$/.exec(filename || '');
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      if (Platform.OS === 'web' && imageUri instanceof File) {
+        // Para web: File object
+        formData.append('car_image', imageUri);
+      } else if (typeof imageUri === 'string') {
+        // Para móvil: URI de React Native
+        const filename = imageUri.split('/').pop() || 'car_image.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        
+        formData.append('car_image', {
+          uri: imageUri,
+          name: filename,
+          type: type,
+        } as any);
+      } else {
+        throw new Error('Tipo de imagen no soportado');
+      }
       
-      formData.append('car_image', {
-        uri: imageUri,
-        name: filename || 'car.jpg',
-        type,
-      } as any);
-
+      // ✅ RUTA CORRECTA
       const response = await fetch(`${API_BASE_URL}/cars/${carId}/image`, {
         method: 'POST',
         headers: {
           'Authorization': getAuthHeaders().Authorization,
-          'Content-Type': 'multipart/form-data',
         },
         body: formData,
       });
@@ -67,13 +76,13 @@ export const imageAPI = {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.message || 'Error al subir imagen del coche');
+        throw new Error(data.message || 'Error al subir la imagen');
       }
       
       return data;
       
     } catch (error: any) {
-      console.error('❌ Error al subir imagen del coche:', error);
+      console.error('❌ Error al subir imagen:', error);
       throw error;
     }
   },
@@ -103,6 +112,7 @@ export const imageAPI = {
   // Eliminar imagen de coche
   deleteCarImage: async (carId: number): Promise<any> => {
     try {
+      // ✅ RUTA CORRECTA
       const response = await fetch(`${API_BASE_URL}/cars/${carId}/image`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
@@ -111,13 +121,12 @@ export const imageAPI = {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.message || 'Error al eliminar imagen del coche');
+        throw new Error(data.message || 'Error al eliminar la imagen');
       }
-      
       return data;
       
     } catch (error: any) {
-      console.error('❌ Error al eliminar imagen del coche:', error);
+      console.error('❌ Error al eliminar imagen:', error);
       throw error;
     }
   },

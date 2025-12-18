@@ -5,7 +5,7 @@ export type RootStackParamList = {
 
   Onboarding: undefined;
 
-  Home: undefined;
+  Home: { refresh?: boolean } | undefined;  // ← AGREGAR ESTO
 
   Login: undefined;
   Register: undefined;
@@ -18,7 +18,10 @@ export type RootStackParamList = {
 
   
   UserProfile: undefined;
-  CarHome: { car: any };
+  CarHome: { 
+    car: any; 
+    refresh?: boolean;  // ← AGREGAR ESTO
+  } | undefined;
   LinkCar: undefined;
   CreateCar: undefined;
   EditProfile: { currentImage?: string };

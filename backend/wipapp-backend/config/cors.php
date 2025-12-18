@@ -15,11 +15,17 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'storage/*'],
 
     'allowed_methods' => ['*'],
 
     'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        'http://localhost:8081',  // Expo web
+        'http://localhost:19006', // Expo dev server alternativo
+        'exp://192.168.*:*',      // Para Expo Go en red local
+        'http://localhost:3000',  // Para desarrollo web
+    ],
 
     'allowed_origins_patterns' => [],
 

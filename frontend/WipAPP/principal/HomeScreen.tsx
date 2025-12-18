@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation';
 import { authAPI } from '../services/authAPI';
+import { useFocusEffect } from '@react-navigation/native';
 import { carAPI } from '../services/carAPI';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -45,6 +46,33 @@ export default function HomeScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCarOptions, setShowCarOptions] = useState(false);
+
+  // Función para cargar coches
+  const loadCars = async () => {
+    try {
+      setRefreshing(true);
+      const response = await carAPI.getUserCars();
+      if (response.success && response.data.cars) {
+        setCars(response.data.cars);
+      }
+    } catch (error) {
+      console.error('Error loading cars:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Cargar coches al montar el componente
+  useEffect(() => {
+    loadCars();
+  }, []);
+
+  // Recargar cuando la pantalla reciba foco
+  useFocusEffect(
+    useCallback(() => {
+      loadCars();
+    }, [])
+  );
 
   const loadUserData = async () => {
     try {

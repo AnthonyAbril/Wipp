@@ -115,15 +115,29 @@ export default function Register({ navigation }: Props) {
             // ✅ Registro exitoso
             console.log('✅ Register response:', response);
             
+            // En la función handleRegister, reemplaza el bloque del Alert.alert exitoso:
+
             Alert.alert(
-                '¡Registro exitoso!',
-                'Tu cuenta ha sido creada correctamente.',
-                [
-                    {
-                        text: 'Continuar',
-                        onPress: () => navigation.navigate('Home')
+            '¡Registro exitoso!',
+            'Tu cuenta ha sido creada correctamente.',
+            [
+                {
+                text: 'Continuar',
+                onPress: () => {
+                    // Verificar que el token se guardó
+                    if (response.data?.access_token) {
+                    // Navegar al Home con parámetros de actualización
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Home' }],
+                    });
+                    } else {
+                    // Si no hay token, ir al login
+                    navigation.navigate('Login');
                     }
-                ]
+                }
+                }
+            ]
             );
             
         } catch (error: any) {

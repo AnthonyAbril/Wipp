@@ -33,6 +33,7 @@ import CarHomeScreen from './principal/CarHomeScreen';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import TestScrollScreen from './TestScrollScreen';
 import CreateCarScreen from './principal/CreateCarScreen';
+import EditCarImageScreen from './principal/EditCarImageScreen';
 
 // Crear el navigator con el tipo = RouterModule en Angular
 //const Stack = createStackNavigator<RootStackParamList>();
@@ -154,8 +155,6 @@ export default function App() {
             }}
           />
 
-
-
           <Stack.Screen
             name="TestScroll"
             component={TestScrollScreen} // Crear esta pantalla después
@@ -164,6 +163,13 @@ export default function App() {
               title: 'Mi Coche'
             }}
           />
+
+          <Stack.Screen 
+            name="EditCarImage" 
+            component={EditCarImageScreen}
+            options={{ title: 'Editar Imagen del Coche' }}
+          />
+
           </Stack.Navigator>
 
         </NavigationContainer>

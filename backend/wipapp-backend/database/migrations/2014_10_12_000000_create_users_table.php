@@ -18,6 +18,11 @@ return new class extends Migration
             $table->string('name');
             $table->string('email')->unique();
             $table->string('password');
+            $table->string('profile_image')->nullable(); // ← Imagen de perfil
+            $table->foreignId('last_used_car_id')         // ← Último coche usado
+                  ->nullable()
+                  ->constrained('cars')
+                  ->onDelete('set null');
             $table->timestamp('email_verified_at')->nullable();
             $table->rememberToken();
             $table->timestamps();
