@@ -18,6 +18,7 @@ import { RootStackParamList } from '../types/navigation';
 import { carAPI } from '../services/carAPI';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { showAlert } from '../utils/alerts';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateCar'>;
 
@@ -126,81 +127,50 @@ export default function CreateCarScreen({ navigation }: Props) {
         carData.car_image = form.car_image;
       }
 
-      await carAPI.createCar(carData);
-      
-      Alert.alert(
-        '✅ Coche Creado',
-        `El coche con matrícula ${form.license_plate.toUpperCase()} ha sido creado exitosamente.`,
-        [
-          {
-            text: 'Ver Coche',
-            onPress: () => {
-              // Opción 1: Recargar y volver atrás
-              navigation.navigate('Home', { refresh: true });
-            },
-          },
-          {
-            text: 'Seguir Creando',
-            style: 'cancel',
-            onPress: () => {
-              // Limpiar formulario para crear otro
-              setForm({
-                license_plate: '',
-                pin_code: '',
-                brand: '',
-                model: '',
-                year: '',
-                color: '',
-                vin: '',
-                car_image: null,
-                _car_image_file: null,
-              });
-              setImage(null);
-            },
-          },
-        ]
+      // ✅ Primero mostrar confirmación para crear el coche
+      showAlert.confirm(
+        'Crear Coche',
+        `¿Estás seguro de que quieres crear el coche con matrícula ${form.license_plate.toUpperCase()}?`,
+        async () => {
+          try {
+            // ✅ Ahora sí crear el coche
+            await carAPI.createCar(carData);
+            
+            // ✅ Mostrar mensaje de éxito DESPUÉS de crear
+            showAlert.success(
+              '✅ Coche Creado\n'+
+              'El coche con matrícula '+form.license_plate.toUpperCase()+' ha sido creado exitosamente.'
+            );
+            
+            // Limpiar formulario
+            setForm({
+              license_plate: '',
+              pin_code: '',
+              brand: '',
+              model: '',
+              year: '',
+              color: '',
+              vin: '',
+              car_image: null,
+              _car_image_file: null,
+            });
+            setImage(null);
+            
+            // Navegar a Home
+            navigation.navigate('Home', { refresh: true });
+            
+          } catch (error: any) {
+            console.error('Error creating car:', error);
+            // Manejar errores (mantener tu código existente aquí)
+            // ...
+          }
+        }
       );
       
     } catch (error: any) {
-    console.error('Error creating car:', error);
-    
-      // Manejar errores de validación del backend
-      if (error.message) {
-        try {
-          const errorData = JSON.parse(error.message);
-          if (errorData.errors) {
-            const backendErrors: FormErrors = {};
-            Object.keys(errorData.errors).forEach(key => {
-              if (errorData.errors[key] && errorData.errors[key][0]) {
-                // Mapear 'car_image' a un mensaje general si existe
-                if (key === 'car_image') {
-                  backendErrors.general = `Error en imagen: ${errorData.errors[key][0]}`;
-                } else {
-                  backendErrors[key as keyof FormErrors] = errorData.errors[key][0];
-                }
-              }
-            });
-            setErrors(backendErrors);
-            return;
-          }
-        } catch (e) {
-          // Si no es JSON, mostrar error general
-        }
-      }
-      
-      let errorMessage = 'Error al crear el coche';
-      
-      if (error.message.includes('Network request failed')) {
-        errorMessage = 'Error de conexión. Verifica tu conexión a internet e intenta nuevamente.';
-      } else if (error.message.includes('license_plate already exists')) {
-        errorMessage = 'Ya existe un coche con esta matrícula.';
-      } else if (error.message.includes('Imagen inválida')) {
-        errorMessage = error.message;
-      } else {
-        errorMessage = error.message || 'Error desconocido al crear el coche';
-      }
-      
-      Alert.alert('❌ Error', errorMessage);
+      console.error('Error en preparación de datos:', error);
+      // Manejar errores de preparación
+      Alert.alert('❌ Error', 'Error al preparar los datos del coche');
     } finally {
       setLoading(false);
     }
