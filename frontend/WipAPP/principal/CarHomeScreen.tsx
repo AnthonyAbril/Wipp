@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -43,45 +43,71 @@ interface CarInfo {
 
 export default function CarHomeScreen({ route, navigation }: Props) {
   // ✅ Extraer parámetros con valor por defecto
-  const { car: initialCar, refresh = false } = route.params || {};
+  const { car: initialCar, refresh = false, carId, timestamp } = route.params || {};
   
-  const [car, setCar] = useState<Car>(initialCar);
+  // ✅ Inicializar con objeto vacío o con valores por defecto
+  const [car, setCar] = useState<Car | null>(initialCar || null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [carLoaded, setCarLoaded] = useState(false);
 
-  // ✅ Un solo useFocusEffect optimizado
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-      
-      // Si viene de una actualización, recargar datos
-      if (refresh) {
+  // Ref para evitar múltiples llamadas
+  const lastRefreshTime = useRef<number>(0);
+  const isMounted = useRef(true);
+
+  // ✅ Inicializar con valores por defecto si no hay car
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted.current) return;
+    
+    const shouldRefresh = refresh || timestamp;
+    
+    if (shouldRefresh) {
+      // Evitar refrescar si ya se refrescó recientemente
+      const now = Date.now();
+      if (now - lastRefreshTime.current > 1000) {
+        lastRefreshTime.current = now;
         loadCarData();
-        // Limpiar el parámetro
-        navigation.setParams({ refresh: false } as any);
-      } else {
-        // Solo cargar si no está ya cargando
-        if (!loading) {
-          loadCarData();
-        }
       }
       
-      // Configurar intervalo opcional
-      const interval = setInterval(() => {
-        if (isActive && !loading) {
-          loadCarData();
+      // Limpiar params después de usar
+      setTimeout(() => {
+        if (isMounted.current) {
+          navigation.setParams({ 
+            refresh: false,
+            timestamp: undefined 
+          } as any);
         }
-      }, 30000);
+      }, 100);
+    }
+  }, [refresh, timestamp, navigation]);
+
+  // ✅ useFocusEffect optimizado
+  useFocusEffect(
+    useCallback(() => {
+      isMounted.current = true;
+      
+      // Cargar datos si no están cargados o si necesitamos refrescar
+      if (!carLoaded || refresh) {
+        loadCarData();
+      }
       
       return () => {
-        isActive = false;
-        clearInterval(interval);
+        isMounted.current = false;
       };
-    }, [refresh, navigation])
+    }, [carLoaded, refresh])
   );
 
-  // Función para cargar datos del coche
-  const loadCarData = async () => {
+  // ✅ Función para cargar datos del coche
+  const loadCarData = async (force = false) => {
+    if ((loading || refreshing) && !force) return;
+    if (!isMounted.current) return;
+    
     try {
       setLoading(true);
       const response = await carAPI.getUserCars();
@@ -89,77 +115,105 @@ export default function CarHomeScreen({ route, navigation }: Props) {
       if (response.success && response.data.cars) {
         const carsData = response.data.cars;
         
-        // Buscar el coche actual con datos actualizados
-        const currentCar = carsData.find((c: Car) => c.id === car.id) || car;
+        // Encontrar el coche actual
+        const targetCarId = carId || car?.id || initialCar?.id;
+        const currentCar = carsData.find((c: Car) => c.id === targetCarId);
         
-        // Asegurarnos de que tenemos la URL completa de la imagen
-        const carWithImage = {
-          ...currentCar,
-          car_image_url: currentCar.car_image_url || 
+        if (currentCar) {
+          // ✅ Asegurar URL completa de imagen
+          const carWithImage = {
+            ...currentCar,
+            car_image_url: currentCar.car_image_url || 
                          (currentCar.car_image ? 
-                          `${API_BASE_URL}/storage/${currentCar.car_image}` : 
+                          `${API_BASE_URL}/storage/${currentCar.car_image.replace(/^public\//, '')}` : 
                           null)
-        };
-        
-        setCar(carWithImage);
+          };
+          
+          setCar(carWithImage);
+          setCarLoaded(true);
+          
+          // ✅ Marcar como último coche usado
+          try {
+            await carAPI.setLastUsedCar(carWithImage.id);
+          } catch (error) {
+            console.error('Error al marcar como último usado:', error);
+          }
+          
+          // ✅ Actualizar navegación si venimos de edición
+          if (refresh || timestamp) {
+            navigation.setParams({ 
+              car: carWithImage,
+              refresh: false,
+              timestamp: undefined 
+            } as any);
+          }
+        } else {
+          // ❌ No se encontró el coche
+          Alert.alert('Error', 'No se encontró el coche solicitado');
+          navigation.goBack();
+        }
       }
-      
     } catch (error: any) {
       console.error('Error loading car data:', error);
       Alert.alert('Error', 'No se pudieron cargar los datos del coche');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
-  useEffect(() => {
-    // Marcar como último coche usado al entrar
-    const markAsLastUsed = async () => {
-      try {
-        await carAPI.setLastUsedCar(car.id);
-      } catch (error) {
-        console.error('Error al marcar como último usado:', error);
-      }
-    };
-    
-    markAsLastUsed();
-  }, [car.id]);
-
   const onRefresh = () => {
     setRefreshing(true);
-    loadCarData();
+    loadCarData(true);
   };
 
-  // Preparar información del coche para mostrar
+  // ✅ Verificar si hay datos antes de renderizar
+  if (!car && loading) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Cargando datos del coche...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // ✅ Si no hay coche después de cargar
+  if (!car && !loading) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <Text style={styles.errorText}>No se encontró el coche</Text>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.navigate('Home')}
+        >
+          <Text style={styles.backButtonText}>← Volver a Mis Coches</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // ✅ Preparar información del coche para mostrar
   const carInfo = [
-    { title: 'Matrícula', value: car.license_plate, icon: '🔢' },
-    { title: 'Marca', value: car.brand || 'No especificada', icon: '🏭' },
-    { title: 'Modelo', value: car.model || 'No especificado', icon: '🚙' },
-    { title: 'Año', value: car.year?.toString() || 'No especificado', icon: '📅' },
-    { title: 'Color', value: car.color || 'No especificado', icon: '🎨' },
-    { title: 'VIN', value: car.vin || 'No especificado', icon: '🔑' },
+    { title: 'Matrícula', value: car!.license_plate, icon: '🔢' },
+    { title: 'Marca', value: car!.brand || 'No especificada', icon: '🏭' },
+    { title: 'Modelo', value: car!.model || 'No especificado', icon: '🚙' },
+    { title: 'Año', value: car!.year?.toString() || 'No especificado', icon: '📅' },
+    { title: 'Color', value: car!.color || 'No especificado', icon: '🎨' },
+    { title: 'VIN', value: car!.vin || 'No especificado', icon: '🔑' },
   ];
 
   const handleSetPrimary = async () => {
     try {
-      await carAPI.setPrimaryCar(car.id);
-      Alert.alert('✅ Éxito', `${car.license_plate} establecido como coche principal`);
-      loadCarData(); // Recargar datos
+      await carAPI.setPrimaryCar(car!.id);
+      Alert.alert('✅ Éxito', `${car!.license_plate} establecido como coche principal`);
+      loadCarData(true); // Recargar datos
     } catch (error: any) {
       console.error('Error setting primary car:', error);
       Alert.alert('❌ Error', 'No se pudo establecer como coche principal');
     }
   };
-
-  if (loading && !refreshing) {
-    return (
-      <SafeAreaView style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Cargando...</Text>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -176,17 +230,16 @@ export default function CarHomeScreen({ route, navigation }: Props) {
           <TouchableOpacity 
             style={styles.carImageContainer}
             onPress={() => {
-              console.log("Navegando a EditCarImage con car ID:", car.id);
-              navigation.navigate('EditCarImage', { car });
+              navigation.navigate('EditCarImage', { car: car! });
             }}
             activeOpacity={0.7}
           >
-            {car.car_image_url || car.car_image ? (
+            {car!.car_image_url || car!.car_image ? (
               <Image 
                 source={{ 
-                  uri: car.car_image_url || 
-                       (car.car_image ? 
-                        `${API_BASE_URL}/storage/${car.car_image}` : 
+                  uri: car!.car_image_url || 
+                       (car!.car_image ? 
+                        `${API_BASE_URL}/storage/${car!.car_image}` : 
                         '')
                 }} 
                 style={styles.carImage}
@@ -205,16 +258,16 @@ export default function CarHomeScreen({ route, navigation }: Props) {
             )}
           </TouchableOpacity>
           
-          <Text style={styles.title}>{car.license_plate}</Text>
+          <Text style={styles.title}>{car!.license_plate}</Text>
           
-          {car.pivot?.is_primary && (
+          {car!.pivot?.is_primary && (
             <View style={styles.primaryBadge}>
               <Text style={styles.primaryBadgeText}>⭐ Principal</Text>
             </View>
           )}
 
           <Text style={styles.subtitle}>
-            {car.brand} {car.model} {car.year && `• ${car.year}`}
+            {car!.brand} {car!.model} {car!.year && `• ${car!.year}`}
           </Text>
         </View>
 
@@ -236,7 +289,7 @@ export default function CarHomeScreen({ route, navigation }: Props) {
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Acciones</Text>
           
-          {!car.pivot?.is_primary && (
+          {!car!.pivot?.is_primary && (
             <TouchableOpacity 
               style={styles.actionButton}
               onPress={handleSetPrimary}
@@ -247,10 +300,10 @@ export default function CarHomeScreen({ route, navigation }: Props) {
 
           <TouchableOpacity 
             style={[styles.actionButton, styles.secondaryAction]}
-            onPress={() => navigation.navigate('EditCarImage', { car })}
+            onPress={() => navigation.navigate('EditCarImage', { car: car! })}
           >
             <Text style={[styles.actionButtonText, styles.secondaryActionText]}>
-              🖼️ {car.car_image ? 'Cambiar Imagen' : 'Agregar Imagen'}
+              🖼️ {car!.car_image ? 'Cambiar Imagen' : 'Agregar Imagen'}
             </Text>
           </TouchableOpacity>
 
@@ -307,11 +360,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#ffffff',
+    padding: 20,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: '#666',
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#FF3B30',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   header: {
     backgroundColor: '#ffffff',
@@ -437,35 +497,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-
   carImageContainer: {
-  width: 120,
-  height: 90,
-  borderRadius: 12,
-  backgroundColor: '#f0f0f0',
-  marginBottom: 16,
-  overflow: 'hidden',
-  borderWidth: 2,
-  borderColor: '#007AFF',
-},
-carImage: {
-  width: '100%',
-  height: '100%',
-},
-carImagePlaceholder: {
-  flex: 1,
-  justifyContent: 'center',
-  alignItems: 'center',
-  backgroundColor: '#f8f9fa',
-},
-carImagePlaceholderText: {
-  fontSize: 40,
-  color: '#666',
-},
-carImagePlaceholderSubtext: {
-  fontSize: 12,
-  color: '#999',
-  textAlign: 'center',
-  marginTop: 4,
-},
+    width: 120,
+    height: 90,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    marginBottom: 16,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  carImage: {
+    width: '100%',
+    height: '100%',
+  },
+  carImagePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  carImagePlaceholderText: {
+    fontSize: 40,
+    color: '#666',
+  },
+  carImagePlaceholderSubtext: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 4,
+  },
 });

@@ -18,10 +18,12 @@ export type RootStackParamList = {
 
   
   UserProfile: undefined;
-  CarHome: { 
-    car: any; 
-    refresh?: boolean;  // ← AGREGAR ESTO
-  } | undefined;
+  CarHome: {
+    car?: any;
+    carId?: number;
+    refresh?: boolean;
+    timestamp?: number;
+  };
   LinkCar: undefined;
   CreateCar: undefined;
   EditProfile: { currentImage?: string };

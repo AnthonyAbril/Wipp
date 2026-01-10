@@ -119,7 +119,6 @@ export default function EditCarImageScreen({ navigation, route }: Props) {
 
   // Actualiar la imagen de un coche
   const uploadImage = async () => {
-    // Verificar si hay una nueva imagen seleccionada
     if (!hasNewImage) {
       showAlert.error('Debes seleccionar una imagen primero');
       return;
@@ -132,47 +131,37 @@ export default function EditCarImageScreen({ navigation, route }: Props) {
       if (Platform.OS === 'web' && selectedFile) {
         fileToUpload = selectedFile;
       } else if (Platform.OS !== 'web' && displayImage && displayImage !== (car.car_image_url || car.car_image)) {
-        // Verificar que es una imagen nueva (no la original)
         fileToUpload = displayImage;
       } else {
         throw new Error('No se pudo determinar la imagen a subir');
       }
       
-      // ✅ Usar imageAPI.uploadCarImage unificada
-      await imageAPI.uploadCarImage(car.id, fileToUpload);
-
-      showAlert.success('Imagen del coche actualizada correctamente'); 
+      // ✅ Subir imagen
+      const response = await imageAPI.uploadCarImage(car.id, fileToUpload);
       
-      // Resetear el estado de nueva imagen
-      setHasNewImage(false);
-      
-      // Navegar de vuelta con parámetro refresh
-      navigation.navigate('CarHome', { 
-        car: { 
-          ...car, 
-          car_image: displayImage,
-          updatedAt: new Date().toISOString()
-        },
-        refresh: true 
-      } as any);
-      
-    } catch (error: any) {
-      console.error('❌ Detalles del error:', {
-        message: error.message,
-        status: error.status,
-        response: error.response
-      });
-      
-      let errorMessage = 'No se pudo subir la imagen';
-      
-      // Mejorar los mensajes de error
-      if (error.message.includes('Error de validación')) {
-        errorMessage = 'La imagen debe ser JPG, PNG o GIF y pesar menos de 2MB';
-      } else if (error.message.includes('500')) {
-        errorMessage = 'Error en el servidor. Inténtalo de nuevo más tarde.';
+      if (response.success) {
+        showAlert.success('Imagen del coche actualizada correctamente'); 
+        
+        // ✅ Pasar datos actualizados
+        const updatedCar = {
+          ...car,
+          car_image: response.data.car_image,
+          car_image_url: response.data.car_image_url || response.data.car_image
+        };
+        
+        navigation.navigate('CarHome', { 
+          car: updatedCar,
+          refresh: true,
+          timestamp: Date.now()
+        } as any);
+        
+      } else {
+        throw new Error(response.message || 'Error al subir la imagen');
       }
       
-      Alert.alert('❌ Error', errorMessage);
+    } catch (error: any) {
+      console.error('❌ Detalles del error:', error);
+      Alert.alert('❌ Error', error.message || 'No se pudo subir la imagen');
     } finally {
       setLoading(false);
     }
