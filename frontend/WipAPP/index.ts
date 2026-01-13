@@ -8,3 +8,16 @@ import App from './App';
 registerRootComponent(App);
 
 
+/*
+    Para lanzar el frontend solo
+    npx expo start
+
+    Para lanzar el frontend para movil
+    $env:REACT_NATIVE_PACKAGER_HOSTNAME="192.168.1.23"; npx expo start --lan
+
+    Para lanzar el backend solo
+    php artisan serve --host=0.0.0.0 --port=8000
+
+    Para lanzarlo a movil
+    php artisan serve --host=192.168.1.23 --port=8000
+*/

@@ -85,7 +85,11 @@ class ImageController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([...], 422);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
         try {
@@ -118,7 +122,11 @@ class ImageController extends Controller
             
         } catch (\Exception $e) {
             \Log::error('💥 ERROR en uploadUserProfile: ' . $e->getMessage());
-            return response()->json([...], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al subir la imagen de perfil',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : null
+            ], 500);
         }
     }
 
@@ -247,7 +255,11 @@ class ImageController extends Controller
             
         } catch (\Exception $e) {
             \Log::error('💥 ERROR en deleteUserProfile: ' . $e->getMessage());
-            return response()->json([...], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar la imagen de perfil',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : null
+            ], 500);
         }
     }
 

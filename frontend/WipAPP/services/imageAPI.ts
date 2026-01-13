@@ -65,6 +65,7 @@ export const imageAPI = {
       }
       
       // ✅ RUTA CORRECTA
+      console.log("Coche ID: "+carId+"\nAPI BASE: "+API_BASE_URL);
       const response = await fetch(`${API_BASE_URL}/cars/${carId}/image`, {
         method: 'POST',
         headers: {

@@ -18,16 +18,19 @@ return [
     'paths' => ['api/*', 'sanctum/csrf-cookie', 'storage/*'],
 
     'allowed_methods' => ['*'],
-
-    'allowed_origins' => ['*'],
     'allowed_origins' => [
-        'http://localhost:8081',  // Expo web
-        'http://localhost:19006', // Expo dev server alternativo
-        'exp://192.168.*:*',      // Para Expo Go en red local
-        'http://localhost:3000',  // Para desarrollo web
+        'http://localhost:8081',
+        'http://localhost:19006',
+        'http://localhost:3000',
+        'http://192.168.1.23:8081',  // Expo web desde tu IP
+        'exp://192.168.1.23:8081',   // Expo Go
+        'http://192.168.1.23:19006', // Alternativa
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '/^http:\/\/192\.168\.\d+\.\d+:[0-9]+$/',  // Todas IPs 192.168.x.x
+        '/^exp:\/\/192\.168\.\d+\.\d+:[0-9]+$/',
+    ],
 
     'allowed_headers' => ['*'],
 

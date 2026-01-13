@@ -2,7 +2,8 @@ import Constants from 'expo-constants';
 
 const isDevelopment = __DEV__;
 //const localIP = '192.168.1.14'; // IP de casa
-const localIP = '192.168.56.1'; // IP de datos
+//const localIP = '192.168.56.1'; // IP de datos
+const localIP = '192.168.1.23'; //IP para usar en el movil
 
 export const API_BASE_URL = isDevelopment 
   ? `http://${localIP}:8000/api`
